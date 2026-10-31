@@ -1,5 +1,5 @@
-import React, {createContext, useContext, useEffect, useMemo, useState} from 'react';
-
+import {useEffect,useMemo,useState} from 'react';
+import {StoreContext} from './StoreContext.js';
 const initialAssessments = [
   {id:'TF-1042',title:'Senior Frontend Engineer',role:'Frontend Engineering',seniority:'Senior',status:'Published',duration:75,created:'2026-10-24',description:'Build thoughtful interfaces, reason about tradeoffs, and communicate decisions.',skills:['React','JavaScript','System design'],challenges:[{id:'c1',title:'Component architecture',type:'Written response',points:40,prompt:'How would you design an accessible, reusable data table?'},{id:'c2',title:'Debug an async flow',type:'Technical challenge',points:60,prompt:'Explain how you would diagnose a race condition in a React application.'}],aiEnabled:false,scoreWeights:{technical:60,reasoning:25,communication:15},passingScore:70,instructions:'Read each question carefully. You can save drafts before submitting.'},
   {id:'TF-1041',title:'Backend API Developer',role:'Backend Engineering',seniority:'Mid-level',status:'Published',duration:60,created:'2026-10-22',description:'Explore API design, reliability, and engineering judgment.',skills:['Node.js','SQL','APIs'],challenges:[{id:'c3',title:'Design a resilient API',type:'Written response',points:100,prompt:'Outline a secure REST API design for managing task assignments.'}],aiEnabled:false,scoreWeights:{technical:60,reasoning:25,communication:15},passingScore:70,instructions:'Explain your thinking and assumptions.'},
@@ -11,9 +11,7 @@ const initialCandidates = [
   {id:'CAN-003',name:'Taylor Reed',email:'taylor.reed@example.com',role:'Backend Developer',status:'Invited',assessmentId:'TF-1041',score:null,invited:'2026-10-26'},
   {id:'CAN-004',name:'Alex Chen',email:'alex.chen@example.com',role:'Backend Developer',status:'Completed',assessmentId:'TF-1041',score:91,invited:'2026-10-23'},
 ];
-const Store = createContext(null);
 function stored(key,fallback) {try {const value=localStorage.getItem('tf_'+key);return value?JSON.parse(value):fallback;}catch{return fallback;}}
-export const uid = (prefix='TF') => `${prefix}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
 export function StoreProvider({children}) {
  const [assessments,setAssessments]=useState(()=>stored('assessments',initialAssessments));
  const [candidates,setCandidates]=useState(()=>stored('candidates',initialCandidates));
@@ -26,8 +24,5 @@ export function StoreProvider({children}) {
  useEffect(()=>localStorage.setItem('tf_user',JSON.stringify(user)),[user]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),4000);return ()=>clearTimeout(timer);},[toast]);
  const value=useMemo(()=>({assessments,setAssessments,candidates,setCandidates,submissions,setSubmissions,user,setUser,toast,setToast}),[assessments,candidates,submissions,user,toast]);
- return <Store.Provider value={value}>{children}</Store.Provider>;
+ return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
-export function useStore(){return useContext(Store);}
-export const formatDate = date => new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-export const blankAssessment=()=>({title:'',role:'Frontend Engineering',seniority:'Mid-level',status:'Draft',duration:60,created:new Date().toISOString().slice(0,10),description:'',skills:[],challenges:[],aiEnabled:false,scoreWeights:{technical:60,reasoning:25,communication:15},passingScore:70,instructions:'Please complete the assessment independently. Explain your reasoning and review your answers before submitting.'});

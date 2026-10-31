@@ -1,8 +1,9 @@
-import React,{useEffect,useState} from 'react';
-import {ArrowLeft,ArrowRight,Check,CheckCircle2,ChevronLeft,ChevronRight,Clock3,Code2,FileText,Info,Plus,Settings2,Sparkles,Trash2,UploadCloud,X} from 'lucide-react';
+import {useEffect,useState} from 'react';
+import {ArrowLeft,Check,CheckCircle2,ChevronLeft,ChevronRight,Code2,Info,Plus,Sparkles,Trash2} from 'lucide-react';
 import {Link,useNavigate,useSearchParams} from 'react-router-dom';
-import {Button,Field,PageHeading,Pill,SectionTitle} from '../components/UI.jsx';
-import {blankAssessment,uid,useStore} from '../context/Store.jsx';
+import {Button,Field,PageHeading,Pill} from '../components/UI.jsx';
+import {blankAssessment,uid} from '../context/assessmentUtils.js';
+import {useStore} from '../context/useStore.js';
 const steps=['Basics','Challenges','AI & timing','Scoring','Review & publish'];
 const knownSkills=['React','JavaScript','TypeScript','Node.js','Python','SQL','API Design','Testing','System Design','Communication','Accessibility','CSS'];
 const newChallenge=()=>({id:uid('CH'),title:'',type:'Written response',points:100,prompt:''});

@@ -1,0 +1,3 @@
+export const uid = (prefix='TF') => `${prefix}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
+export const formatDate = date => new Date(`${date}T12:00:00`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+export const blankAssessment=()=>({title:'',role:'Frontend Engineering',seniority:'Mid-level',status:'Draft',duration:60,created:new Date().toISOString().slice(0,10),description:'',skills:[],challenges:[],aiEnabled:false,scoreWeights:{technical:60,reasoning:25,communication:15},passingScore:70,instructions:'Please complete the assessment independently. Explain your reasoning and review your answers before submitting.'});

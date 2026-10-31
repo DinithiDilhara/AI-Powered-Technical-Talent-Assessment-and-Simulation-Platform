@@ -1,5 +1,5 @@
-import React from 'react';
-import {ArrowRight,ArrowUpRight,Check,CheckCircle2,ChevronRight,LoaderCircle,Plus,Search,X} from 'lucide-react';
+
+import {ArrowRight,ArrowUpRight,CheckCircle2,ChevronRight,Search} from 'lucide-react';
 import {Link} from 'react-router-dom';
 export function Logo({small=false}){return <Link to="/" className={`logo ${small?'logo-sm':''}`} aria-label="TalentForge homepage"><span className="logo-mark">F</span><span>Talent<span className="logo-soft">Forge</span></span></Link>}
 export function Button({children,to,variant='primary',icon=false,className='',...props}){const cls=`btn btn-${variant} ${className}`;return to?<Link className={cls} to={to} {...props}>{children}{icon&&<ArrowUpRight size={15}/>}</Link>:<button className={cls} {...props}>{children}{icon&&<ArrowRight size={15}/>}</button>}
