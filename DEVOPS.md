@@ -59,3 +59,20 @@ Existing PostgreSQL volumes are not automatically reinitialized.
 
 Do not use `docker compose down -v` unless database data deletion
 is explicitly intended.
+
+## Assessment task seed
+
+On a fresh database volume, PostgreSQL runs `schema.sql` before `seed.sql`.
+The sample seed uses the first existing employer as its assessment creator. If
+there is no employer account yet, it skips the sample without creating a
+fabricated user or assessment. After an employer account exists, rerun the seed
+against the running local database:
+
+```powershell
+docker compose exec -T db psql -U postgres -d talentforge -f /docker-entrypoint-initdb.d/schema.sql
+docker compose exec -T db psql -U postgres -d talentforge -f /docker-entrypoint-initdb.d/seed.sql
+```
+
+The seed is safe to rerun and does not replace existing assessment or task
+records. Schema and seed files are not automatically reapplied to an existing
+database volume; apply the additive schema first, then run the seed command.
