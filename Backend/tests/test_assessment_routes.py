@@ -7,9 +7,9 @@ from app.security import create_access_token
 from test_auth_route_access import _AsgiClient
 
 
-def assessment_row(identifier=21, owner=700, state="draft"):
+def assessment_row(identifier=21, owner=700, state="draft", technical_role=None):
     return (
-        identifier, "API assessment", "Description", "medium", 45,
+        identifier, "API assessment", "Description", technical_role, "medium", 45,
         owner, state, datetime(2026, 1, 1),
     )
 
@@ -45,6 +45,20 @@ class AssessmentRouteTests(unittest.TestCase):
         self.assertIn("'draft'", connection.cursor_value.calls[0][0])
         self.assertTrue(connection.committed)
 
+    def test_assessment_can_include_a_supported_technical_role(self):
+        connection = _FakeConnection(
+            one=[assessment_row(technical_role="AI Engineer")]
+        )
+        response = self.with_db(connection, lambda: self.request(
+            "POST", "/assessments", payload={
+                "title": "AI assessment", "difficulty": "medium", "duration": 45,
+                "technical_role": "AI Engineer",
+            }
+        ))
+        self.assertEqual(response.status, 201)
+        self.assertEqual(response.json["technical_role"], "AI Engineer")
+        self.assertEqual(connection.cursor_value.calls[0][1][2], "AI Engineer")
+
     def test_candidate_cannot_create_assessment(self):
         response = self.request("POST", "/assessments", role="candidate", user_id=701,
                                 payload={"title":"A", "difficulty":"easy", "duration":10})
@@ -55,6 +69,7 @@ class AssessmentRouteTests(unittest.TestCase):
             {"title":"A", "difficulty":"extreme", "duration":10},
             {"title":"A", "difficulty":"easy", "duration":0},
             {"title":"", "difficulty":"easy", "duration":10},
+            {"title":"A", "difficulty":"easy", "duration":10, "technical_role":"Frontend Engineer"},
         ):
             response = self.request("POST", "/assessments", payload=payload)
             self.assertEqual(response.status, 422)
@@ -86,6 +101,17 @@ class AssessmentRouteTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(connection.cursor_value.calls[1][1], ("Revised title", 21, 700))
         self.assertTrue(connection.committed)
+
+    def test_draft_assessment_technical_role_can_be_updated(self):
+        connection = _FakeConnection(
+            one=[("draft",), assessment_row(technical_role="SE Intern")]
+        )
+        response = self.with_db(connection, lambda: self.request(
+            "PATCH", "/assessments/21", payload={"technical_role": "SE Intern"}
+        ))
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.json["technical_role"], "SE Intern")
+        self.assertEqual(connection.cursor_value.calls[1][1], ("SE Intern", 21, 700))
 
     def test_update_rejects_empty_and_null_required_fields(self):
         for payload in ({}, {"title": None}, {"duration": None}):

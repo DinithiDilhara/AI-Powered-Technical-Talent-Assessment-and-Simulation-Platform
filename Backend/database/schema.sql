@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     description TEXT,
+    technical_role VARCHAR(50),
     difficulty VARCHAR(20) NOT NULL
         CHECK (difficulty IN ('easy', 'medium', 'hard')),
     duration INTEGER NOT NULL
@@ -41,6 +42,58 @@ CREATE TABLE IF NOT EXISTS assessments (
         FOREIGN KEY (created_by)
         REFERENCES users(id)
         ON DELETE RESTRICT
+);
+
+ALTER TABLE assessments
+    ADD COLUMN IF NOT EXISTS technical_role VARCHAR(50);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_assessment_technical_role'
+          AND conrelid = 'assessments'::regclass
+    ) THEN
+        ALTER TABLE assessments
+            ADD CONSTRAINT chk_assessment_technical_role
+            CHECK (
+                technical_role IS NULL
+                OR technical_role IN (
+                    'SE Intern',
+                    'SE',
+                    'SSE',
+                    'AI Intern',
+                    'AI Engineer',
+                    'DevOps Intern',
+                    'DevOps Engineer'
+                )
+            );
+    END IF;
+END;
+$$;
+
+CREATE TABLE IF NOT EXISTS assessment_tasks (
+    id SERIAL PRIMARY KEY,
+    assessment_id INTEGER NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    task_type VARCHAR(20) NOT NULL
+        CHECK (task_type IN ('coding', 'IQ')),
+    difficulty VARCHAR(20) NOT NULL
+        CHECK (difficulty IN ('easy', 'medium', 'hard')),
+    instructions TEXT NOT NULL,
+    maximum_score NUMERIC(7, 2) NOT NULL
+        CHECK (maximum_score > 0),
+    time_limit_seconds INTEGER
+        CHECK (time_limit_seconds IS NULL OR time_limit_seconds > 0),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_task_assessment
+        FOREIGN KEY (assessment_id)
+        REFERENCES assessments(id)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS submissions (
@@ -107,6 +160,9 @@ CREATE TABLE IF NOT EXISTS assessment_invitations (
 
 CREATE INDEX IF NOT EXISTS idx_assessments_created_by
     ON assessments(created_by);
+
+CREATE INDEX IF NOT EXISTS idx_assessment_tasks_assessment
+    ON assessment_tasks(assessment_id);
 
 CREATE INDEX IF NOT EXISTS idx_submissions_candidate
     ON submissions(candidate_id);
