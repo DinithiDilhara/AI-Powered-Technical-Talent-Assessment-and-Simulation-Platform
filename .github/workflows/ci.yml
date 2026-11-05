@@ -53,7 +53,7 @@ jobs:
         working-directory: Backend
         env:
           JWT_SECRET_KEY: ci-testing-only-secret
-        run: python -m pytest tests/test_health.py -v
+        run: python -m pytest tests -v
 
 
   backend:
@@ -76,3 +76,4 @@ jobs:
         env:
           JWT_SECRET_KEY: ci-validation-only-not-for-production
         run: docker compose -f compose.yaml config --quiet
+
