@@ -28,6 +28,16 @@ class AssessmentDifficulty(str, Enum):
     hard = "hard"
 
 
+class AssessmentRole(str, Enum):
+    se_intern = "SE Intern"
+    se = "SE"
+    sse = "SSE"
+    ai_intern = "AI Intern"
+    ai_engineer = "AI Engineer"
+    devops_intern = "DevOps Intern"
+    devops_engineer = "DevOps Engineer"
+
+
 class AssessmentStatus(str, Enum):
     draft = "draft"
     published = "published"
@@ -37,6 +47,7 @@ class AssessmentStatus(str, Enum):
 class AssessmentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
+    technical_role: AssessmentRole | None = None
     difficulty: AssessmentDifficulty
     duration: int = Field(gt=0)
 
@@ -44,6 +55,7 @@ class AssessmentCreate(BaseModel):
 class AssessmentUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
+    technical_role: AssessmentRole | None = None
     difficulty: AssessmentDifficulty | None = None
     duration: int | None = Field(default=None, gt=0)
 
@@ -61,11 +73,34 @@ class AssessmentResponse(BaseModel):
     id: int
     title: str
     description: str | None
+    technical_role: AssessmentRole | None
     difficulty: AssessmentDifficulty
     duration: int
     created_by: int
     status: AssessmentStatus
     created_at: datetime
+
+
+class AssessmentTaskType(str, Enum):
+    coding = "coding"
+    iq = "IQ"
+
+
+class AssessmentTaskCreate(BaseModel):
+    assessment_id: int = Field(gt=0)
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(min_length=1)
+    task_type: AssessmentTaskType
+    difficulty: AssessmentDifficulty
+    instructions: str = Field(min_length=1)
+    maximum_score: Decimal = Field(gt=0)
+    time_limit_seconds: int | None = Field(default=None, gt=0)
+
+
+class AssessmentTaskResponse(AssessmentTaskCreate):
+    id: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class SubmissionStatus(str, Enum):
