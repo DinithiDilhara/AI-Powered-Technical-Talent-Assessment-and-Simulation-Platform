@@ -1,6 +1,7 @@
 
 from fastapi import FastAPI, HTTPException, status, Depends
 from app.routers.candidates import router as candidates_router
+from app.routers.assessments import router as assessments_router
 from app.schemas import UserRegister, UserRole
 from app.security import hash_password
 from app.database import get_connection
@@ -13,6 +14,7 @@ app = FastAPI(title="Technical Talent Assessment Platform")
 
 app.include_router(auth_router)
 app.include_router(candidates_router)
+app.include_router(assessments_router)
 
 
 @app.get("/")
