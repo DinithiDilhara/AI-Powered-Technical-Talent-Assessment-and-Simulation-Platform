@@ -6,10 +6,14 @@ from app.schemas import AssessmentCreate, AssessmentResponse, AssessmentUpdate
 
 
 router = APIRouter(prefix="/assessments", tags=["Assessments"])
-ASSESSMENT_COLUMNS = "id, title, description, difficulty, duration, created_by, status, created_at"
+ASSESSMENT_COLUMNS = (
+    "id, title, description, technical_role, difficulty, duration, "
+    "created_by, status, created_at"
+)
 UPDATE_COLUMNS = {
     "title": "title",
     "description": "description",
+    "technical_role": "technical_role",
     "difficulty": "difficulty",
     "duration": "duration",
 }
@@ -17,7 +21,10 @@ UPDATE_COLUMNS = {
 
 def _as_assessment(row):
     return dict(zip(
-        ("id", "title", "description", "difficulty", "duration", "created_by", "status", "created_at"),
+        (
+            "id", "title", "description", "technical_role", "difficulty",
+            "duration", "created_by", "status", "created_at",
+        ),
         row,
     ))
 
@@ -31,10 +38,18 @@ def create_assessment(
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                f"""INSERT INTO assessments (title, description, difficulty, duration, created_by, status)
-                    VALUES (%s, %s, %s, %s, %s, 'draft') RETURNING {ASSESSMENT_COLUMNS}""",
-                (assessment.title, assessment.description, assessment.difficulty.value,
-                 assessment.duration, current_user["id"]),
+                f"""INSERT INTO assessments
+                       (title, description, technical_role, difficulty, duration, created_by, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'draft')
+                    RETURNING {ASSESSMENT_COLUMNS}""",
+                (
+                    assessment.title,
+                    assessment.description,
+                    assessment.technical_role.value if assessment.technical_role else None,
+                    assessment.difficulty.value,
+                    assessment.duration,
+                    current_user["id"],
+                ),
             )
             row = cursor.fetchone()
         connection.commit()
@@ -109,7 +124,7 @@ def update_assessment(
 ):
     values = updates.model_dump(exclude_unset=True)
     for key, value in values.items():
-        if key == "difficulty":
+        if value is not None and key in ("technical_role", "difficulty"):
             values[key] = value.value
     assignments = ", ".join(f"{UPDATE_COLUMNS[key]} = %s" for key in values)
     connection = get_connection()
