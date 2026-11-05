@@ -14,8 +14,7 @@ class UserRegister(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
-    # Public registration is candidate-only. The endpoint rejects explicit
-    # employer requests; omission remains compatible with simpler clients.
+    # Public Sprint 1 registration supports both defined account roles.
     role: UserRole = UserRole.candidate
 
 class UserLogin(BaseModel):
@@ -100,3 +99,38 @@ class SubmissionResponse(BaseModel):
     status: SubmissionStatus
     started_at: datetime
     submitted_at: datetime | None
+
+
+class InvitationCreate(BaseModel):
+    candidate_email: EmailStr = Field(max_length=254)
+
+
+class InvitationCreatedResponse(BaseModel):
+    id: int
+    assessment_id: int
+    candidate_email: EmailStr
+    expires_at: datetime
+    invitation_url: str
+
+
+class InvitationTokenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=32, max_length=128)
+
+
+class InvitationValidationResponse(BaseModel):
+    invitation_id: int
+    assessment_id: int
+    assessment_title: str
+    description: str | None
+    difficulty: AssessmentDifficulty
+    duration: int
+    expires_at: datetime
+    claimed: bool
+
+
+class InvitationClaimResponse(BaseModel):
+    invitation_id: int
+    assessment_id: int
+    submission: SubmissionResponse

@@ -1,9 +1,11 @@
 
 from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from app.routers.candidates import router as candidates_router
 from app.routers.assessments import router as assessments_router
 from app.routers.submissions import router as submissions_router
-from app.schemas import UserRegister, UserRole
+from app.routers.invitations import router as invitations_router
+from app.schemas import UserRegister
 from app.security import hash_password
 from app.database import get_connection
 from app.routers.auth import router as auth_router
@@ -12,11 +14,19 @@ from app.dependencies import require_role
 
 app = FastAPI(title="Technical Talent Assessment Platform")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
 
 app.include_router(auth_router)
 app.include_router(candidates_router)
 app.include_router(assessments_router)
 app.include_router(submissions_router)
+app.include_router(invitations_router)
 
 
 @app.get("/")
@@ -72,11 +82,6 @@ def check_users_table():
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)
 def register_user(user: UserRegister):
-    if user.role is not UserRole.candidate:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Employer accounts must be created through an authorized process"
-        )
     connection = get_connection()
 
     try:

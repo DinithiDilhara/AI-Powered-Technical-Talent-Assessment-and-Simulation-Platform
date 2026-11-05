@@ -4,7 +4,6 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 from app.dependencies import check_user_role, get_current_user, require_role
-from app.main import register_user
 from app.routers.auth import login_user
 from app.schemas import UserLogin, UserRegister
 
@@ -14,13 +13,15 @@ class AuthRoleTests(unittest.TestCase):
         data = UserRegister(full_name="Candidate One", email="candidate@example.com", password="password123")
         self.assertEqual(data.role.value, "candidate")
 
-    def test_public_registration_rejects_employer_before_database_access(self):
-        data = UserRegister(full_name="Employer One", email="employer@example.com", password="password123", role="employer")
-        with patch("app.main.get_connection") as connect:
-            with self.assertRaises(HTTPException) as raised:
-                register_user(data)
-        self.assertEqual(raised.exception.status_code, 403)
-        connect.assert_not_called()
+    def test_registration_role_enum_accepts_candidate_and_employer(self):
+        for role in ("candidate", "employer"):
+            data = UserRegister(
+                full_name="Role Test User",
+                email=f"{role}@example.com",
+                password="password123",
+                role=role,
+            )
+            self.assertEqual(data.role.value, role)
 
     def test_login_returns_token_and_role(self):
         cursor = _Cursor((7, "Candidate One", "candidate@example.com", "hashed", "candidate"))

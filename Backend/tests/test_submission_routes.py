@@ -32,31 +32,50 @@ class SubmissionRouteTests(unittest.TestCase):
             return callback()
 
     def test_start_published_assessment_creates_submission_for_profile(self):
-        connection = _FakeConnection(one=[(33,), None, ("published",), submission_row()])
+        connection = _FakeConnection(one=[(33,), (99,), None, None, ("published",), submission_row()])
         response = self.with_db(connection, lambda: self.request(
             "POST", "/submissions", {"assessment_id": 12}
         ))
         self.assertEqual(response.status, 201)
         self.assertEqual(response.json["candidate_id"], 33)
         self.assertEqual(response.json["status"], "in_progress")
-        self.assertEqual(connection.cursor_value.calls[2][1], (12,))
-        insert_sql, insert_params = connection.cursor_value.calls[3]
+        invitation_sql, invitation_params = connection.cursor_value.calls[1]
+        self.assertIn("accepted_at IS NOT NULL", invitation_sql)
+        self.assertIn("expires_at > CURRENT_TIMESTAMP", invitation_sql)
+        self.assertIn("revoked_at IS NULL", invitation_sql)
+        self.assertEqual(invitation_params, (12, 33))
+        insert_sql, insert_params = connection.cursor_value.calls[5]
         self.assertIn("ON CONFLICT (candidate_id, assessment_id) DO NOTHING", insert_sql)
         self.assertEqual(insert_params, (33, 12))
         self.assertTrue(connection.committed)
 
     def test_start_resumes_existing_submission_even_if_assessment_closed(self):
         row = submission_row()
-        connection = _FakeConnection(one=[(33,), row])
+        connection = _FakeConnection(one=[(33,), (99,), row])
         response = self.with_db(connection, lambda: self.request(
             "POST", "/submissions", {"assessment_id": 12}
         ))
         self.assertEqual(response.status, 200)
         self.assertEqual(response.json["id"], 81)
+        self.assertEqual(len(connection.cursor_value.calls), 3)
+
+    def test_new_attempt_without_accepted_invitation_is_forbidden(self):
+        connection = _FakeConnection(one=[(33,), None])
+        response = self.with_db(connection, lambda: self.request(
+            "POST", "/submissions", {"assessment_id": 12}
+        ))
+        self.assertEqual(response.status, 403)
+
+    def test_in_progress_submission_cannot_be_resumed_without_valid_invitation(self):
+        connection = _FakeConnection(one=[(33,), None])
+        response = self.with_db(connection, lambda: self.request(
+            "POST", "/submissions", {"assessment_id": 12}
+        ))
+        self.assertEqual(response.status, 403)
         self.assertEqual(len(connection.cursor_value.calls), 2)
 
     def test_start_rechecks_for_concurrent_resume_before_rejecting_closed_assessment(self):
-        connection = _FakeConnection(one=[(33,), None, ("closed",), submission_row()])
+        connection = _FakeConnection(one=[(33,), (99,), None, None, ("closed",), submission_row()])
         response = self.with_db(connection, lambda: self.request(
             "POST", "/submissions", {"assessment_id": 12}
         ))
@@ -64,7 +83,7 @@ class SubmissionRouteTests(unittest.TestCase):
         self.assertEqual(response.json["status"], "in_progress")
 
     def test_start_rejects_existing_submitted_attempt(self):
-        connection = _FakeConnection(one=[(33,), submission_row("submitted")])
+        connection = _FakeConnection(one=[(33,), (99,), submission_row("submitted")])
         response = self.with_db(connection, lambda: self.request(
             "POST", "/submissions", {"assessment_id": 12}
         ))
@@ -78,14 +97,14 @@ class SubmissionRouteTests(unittest.TestCase):
         self.assertEqual(response.status, 404)
 
     def test_start_returns_404_for_missing_assessment(self):
-        connection = _FakeConnection(one=[(33,), None, None])
+        connection = _FakeConnection(one=[(33,), (99,), None, None, None])
         response = self.with_db(connection, lambda: self.request(
             "POST", "/submissions", {"assessment_id": 999}
         ))
         self.assertEqual(response.status, 404)
 
     def test_start_rejects_unpublished_assessment(self):
-        connection = _FakeConnection(one=[(33,), None, ("draft",)])
+        connection = _FakeConnection(one=[(33,), (99,), None, None, ("draft",)])
         response = self.with_db(connection, lambda: self.request(
             "POST", "/submissions", {"assessment_id": 12}
         ))
@@ -93,7 +112,7 @@ class SubmissionRouteTests(unittest.TestCase):
         self.assertTrue(connection.rolled_back)
 
     def test_concurrent_duplicate_start_returns_winning_in_progress_row(self):
-        connection = _FakeConnection(one=[(33,), None, ("published",), None, submission_row()])
+        connection = _FakeConnection(one=[(33,), (99,), None, None, ("published",), None, submission_row()])
         response = self.with_db(connection, lambda: self.request(
             "POST", "/submissions", {"assessment_id": 12}
         ))
@@ -101,7 +120,7 @@ class SubmissionRouteTests(unittest.TestCase):
         self.assertEqual(response.json["id"], 81)
 
     def test_concurrent_duplicate_start_with_terminal_row_returns_409(self):
-        connection = _FakeConnection(one=[(33,), None, ("published",), None, submission_row("evaluated")])
+        connection = _FakeConnection(one=[(33,), (99,), None, None, ("published",), None, submission_row("evaluated")])
         response = self.with_db(connection, lambda: self.request(
             "POST", "/submissions", {"assessment_id": 12}
         ))

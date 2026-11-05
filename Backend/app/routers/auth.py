@@ -1,7 +1,8 @@
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.database import get_connection
+from app.dependencies import get_current_user
 from app.security import verify_password, create_access_token
 from app.schemas import UserLogin
 
@@ -10,6 +11,12 @@ router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
+
+
+@router.get("/me")
+def get_authenticated_user(current_user: dict = Depends(get_current_user)):
+    """Return identity claims only after the bearer token has been verified."""
+    return {"id": current_user["id"], "role": current_user["role"]}
 
 
 @router.post("/login")
