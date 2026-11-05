@@ -68,7 +68,7 @@ def start_submission_for_candidate(cursor, candidate_id: int, assessment_id: int
         raise HTTPException(status_code=409, detail="Only published assessments can be started")
 
     cursor.execute(
-        f"""INSERT INTO submissions (candidate_id, assessment_id, answers, status)
+        f"""INSERT INTO submissions AS s (candidate_id, assessment_id, answers, status)
             VALUES (%s, %s, '{{}}'::jsonb, 'in_progress')
             ON CONFLICT (candidate_id, assessment_id) DO NOTHING
             RETURNING {SUBMISSION_COLUMNS}""",

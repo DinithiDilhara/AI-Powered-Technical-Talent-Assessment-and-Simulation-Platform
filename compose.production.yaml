@@ -1,0 +1,17 @@
+# Standalone backend with externally provisioned PostgreSQL.
+# Run explicitly using -f compose.production.yaml.
+services:
+  backend:
+    build:
+      context: ./Backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set the production PostgreSQL connection URL}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set a production JWT secret}
+      DB_SSLMODE: verify-full
+      DB_SSLROOTCERT: ${DB_SSLROOTCERT:-/etc/ssl/certs/ca-certificates.crt}
+      DB_CONNECT_TIMEOUT: "10"
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set exact HTTPS frontend origins}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:?Set the HTTPS frontend URL}
+    ports:
+      - "127.0.0.1:8000:8000"

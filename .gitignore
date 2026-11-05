@@ -22,3 +22,9 @@ Backend/.env
 
 node_modules/
 **/.venv/
+
+# Local database exports (may contain credentials and invitation hashes)
+*_backup.sql
+*.dump
+backups/
+Frontend/dist/

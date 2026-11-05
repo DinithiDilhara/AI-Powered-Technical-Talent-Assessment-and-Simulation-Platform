@@ -6,7 +6,7 @@ on:
     branches:
       - main
       - development
-      - feature/devops
+      - 'feature/**'
   pull_request:
     branches:
       - development
@@ -29,10 +29,25 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run lint
+      - run: node --test tests/*.test.js
       
   backend-api-tests:
     name: Backend API Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: talentforge_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d talentforge_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout repository
@@ -53,6 +68,7 @@ jobs:
         working-directory: Backend
         env:
           JWT_SECRET_KEY: ci-testing-only-secret
+          TEST_DATABASE_URL: postgresql://postgres:ci-test-only@localhost:5432/talentforge_test
         run: python -m pytest tests -v
 
 
@@ -76,4 +92,11 @@ jobs:
         env:
           JWT_SECRET_KEY: ci-validation-only-not-for-production
         run: docker compose -f compose.yaml config --quiet
+      - name: Validate production configuration
+        env:
+          DATABASE_URL: postgresql://app:validation-only@db.example:5432/talentforge
+          JWT_SECRET_KEY: ci-validation-only-not-for-production
+          CORS_ORIGINS: https://frontend.example
+          FRONTEND_BASE_URL: https://frontend.example
+        run: docker compose -f compose.production.yaml config --quiet
 

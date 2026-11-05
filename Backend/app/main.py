@@ -1,4 +1,6 @@
 
+import os
+
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers.candidates import router as candidates_router
@@ -16,7 +18,9 @@ app = FastAPI(title="Technical Talent Assessment Platform")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[origin.strip().rstrip("/") for origin in os.getenv(
+        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+    ).split(",") if origin.strip()],
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type"],
 )
@@ -43,10 +47,11 @@ def health_check():
 
 @app.get("/db-test")
 def test_database():
-    connection = get_connection()
-
+    connection = None
     try:
-        connection.close()
+        connection = get_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
         return {"message": "Database connection successful!"}
 
     except Exception:
@@ -54,6 +59,9 @@ def test_database():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database connection failed"
         )
+    finally:
+        if connection is not None:
+            connection.close()
 
 
 @app.get("/users")
