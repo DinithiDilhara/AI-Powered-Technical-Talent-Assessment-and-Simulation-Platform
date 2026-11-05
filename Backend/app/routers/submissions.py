@@ -33,6 +33,68 @@ def _owned_submission_query(suffix=""):
     )
 
 
+def start_submission_for_candidate(cursor, candidate_id: int, assessment_id: int):
+    """Return (submission row, was_created), reusing an in-progress attempt."""
+    cursor.execute(
+        f"SELECT {SUBMISSION_COLUMNS} FROM submissions s "
+        "WHERE s.candidate_id = %s AND s.assessment_id = %s",
+        (candidate_id, assessment_id),
+    )
+    existing = cursor.fetchone()
+    if existing is not None:
+        if existing[5] == "in_progress":
+            return existing, False
+        raise HTTPException(
+            status_code=409,
+            detail="A submission for this assessment has already been completed",
+        )
+
+    cursor.execute(
+        "SELECT status FROM assessments WHERE id = %s FOR SHARE",
+        (assessment_id,),
+    )
+    assessment = cursor.fetchone()
+    if assessment is None:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    if assessment[0] != "published":
+        cursor.execute(
+            f"SELECT {SUBMISSION_COLUMNS} FROM submissions s "
+            "WHERE s.candidate_id = %s AND s.assessment_id = %s",
+            (candidate_id, assessment_id),
+        )
+        concurrent = cursor.fetchone()
+        if concurrent is not None and concurrent[5] == "in_progress":
+            return concurrent, False
+        raise HTTPException(status_code=409, detail="Only published assessments can be started")
+
+    cursor.execute(
+        f"""INSERT INTO submissions (candidate_id, assessment_id, answers, status)
+            VALUES (%s, %s, '{{}}'::jsonb, 'in_progress')
+            ON CONFLICT (candidate_id, assessment_id) DO NOTHING
+            RETURNING {SUBMISSION_COLUMNS}""",
+        (candidate_id, assessment_id),
+    )
+    created = cursor.fetchone()
+    if created is not None:
+        return created, True
+
+    # A concurrent request inserted the unique candidate/assessment pair.
+    cursor.execute(
+        f"SELECT {SUBMISSION_COLUMNS} FROM submissions s "
+        "WHERE s.candidate_id = %s AND s.assessment_id = %s",
+        (candidate_id, assessment_id),
+    )
+    concurrent = cursor.fetchone()
+    if concurrent is None:
+        raise HTTPException(status_code=409, detail="Could not start assessment; retry the request")
+    if concurrent[5] != "in_progress":
+        raise HTTPException(
+            status_code=409,
+            detail="A submission for this assessment has already been completed",
+        )
+    return concurrent, False
+
+
 @router.post("", response_model=SubmissionResponse, status_code=status.HTTP_201_CREATED)
 def start_submission(
     data: SubmissionStart,
@@ -51,8 +113,19 @@ def start_submission(
                 raise HTTPException(status_code=404, detail="Candidate profile not found")
             candidate_id = candidate[0]
 
-            # Resume before checking assessment availability: closing an assessment
-            # prevents new attempts but does not invalidate an existing attempt.
+            # Require a current invitation for both starting and resuming. This
+            # prevents expired or revoked links being bypassed through this API.
+            cursor.execute(
+                """SELECT id FROM assessment_invitations
+                   WHERE assessment_id = %s AND candidate_id = %s
+                     AND accepted_at IS NOT NULL AND revoked_at IS NULL
+                     AND expires_at > CURRENT_TIMESTAMP
+                   LIMIT 1 FOR SHARE""",
+                (data.assessment_id, candidate_id),
+            )
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=403, detail="A valid accepted invitation is required")
+
             cursor.execute(
                 f"SELECT {SUBMISSION_COLUMNS} FROM submissions s "
                 "WHERE s.candidate_id = %s AND s.assessment_id = %s",
@@ -69,53 +142,10 @@ def start_submission(
                     detail="A submission for this assessment has already been completed",
                 )
 
-            # Lock the assessment row during the insert so it cannot be closed
-            # between availability validation and creation of the attempt.
-            cursor.execute(
-                "SELECT status FROM assessments WHERE id = %s FOR SHARE",
-                (data.assessment_id,),
+            created, was_created = start_submission_for_candidate(
+                cursor, candidate_id, data.assessment_id
             )
-            assessment = cursor.fetchone()
-            if assessment is None:
-                raise HTTPException(status_code=404, detail="Assessment not found")
-            if assessment[0] != "published":
-                # A concurrent start may have completed after the first
-                # existing-submission lookup. Honor resume semantics even if
-                # the assessment was closed before this request acquired its
-                # assessment-row lock.
-                cursor.execute(
-                    f"SELECT {SUBMISSION_COLUMNS} FROM submissions s "
-                    "WHERE s.candidate_id = %s AND s.assessment_id = %s",
-                    (candidate_id, data.assessment_id),
-                )
-                concurrent = cursor.fetchone()
-                if concurrent is not None and concurrent[5] == "in_progress":
-                    response.status_code = status.HTTP_200_OK
-                    connection.commit()
-                    return _as_submission(concurrent)
-                raise HTTPException(status_code=409, detail="Only published assessments can be started")
-
-            cursor.execute(
-                f"""INSERT INTO submissions (candidate_id, assessment_id, answers, status)
-                    VALUES (%s, %s, '{{}}'::jsonb, 'in_progress')
-                    ON CONFLICT (candidate_id, assessment_id) DO NOTHING
-                    RETURNING {SUBMISSION_COLUMNS}""",
-                (candidate_id, data.assessment_id),
-            )
-            created = cursor.fetchone()
-            if created is None:
-                # Another request won the unique-key race. A new statement sees
-                # its committed row after ON CONFLICT has waited for that insert.
-                cursor.execute(
-                    f"SELECT {SUBMISSION_COLUMNS} FROM submissions s "
-                    "WHERE s.candidate_id = %s AND s.assessment_id = %s",
-                    (candidate_id, data.assessment_id),
-                )
-                created = cursor.fetchone()
-                if created is None:
-                    raise HTTPException(status_code=409, detail="Could not start assessment; retry the request")
-                if created[5] != "in_progress":
-                    raise HTTPException(status_code=409, detail="A submission for this assessment has already been completed")
+            if not was_created:
                 response.status_code = status.HTTP_200_OK
 
         connection.commit()

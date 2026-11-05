@@ -1,5 +1,7 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useCallback,useEffect,useMemo,useState} from 'react';
 import {StoreContext} from './StoreContext.js';
+import {apiRequest} from '../api.js';
+import {readAuthSession,writeAuthSession} from '../authSession.js';
 const initialAssessments = [
   {id:'TF-1042',title:'Senior Frontend Engineer',role:'Frontend Engineering',seniority:'Senior',status:'Published',duration:75,created:'2026-10-24',description:'Build thoughtful interfaces, reason about tradeoffs, and communicate decisions.',skills:['React','JavaScript','System design'],challenges:[{id:'c1',title:'Component architecture',type:'Written response',points:40,prompt:'How would you design an accessible, reusable data table?'},{id:'c2',title:'Debug an async flow',type:'Technical challenge',points:60,prompt:'Explain how you would diagnose a race condition in a React application.'}],aiEnabled:false,scoreWeights:{technical:60,reasoning:25,communication:15},passingScore:70,instructions:'Read each question carefully. You can save drafts before submitting.'},
   {id:'TF-1041',title:'Backend API Developer',role:'Backend Engineering',seniority:'Mid-level',status:'Published',duration:60,created:'2026-10-22',description:'Explore API design, reliability, and engineering judgment.',skills:['Node.js','SQL','APIs'],challenges:[{id:'c3',title:'Design a resilient API',type:'Written response',points:100,prompt:'Outline a secure REST API design for managing task assignments.'}],aiEnabled:false,scoreWeights:{technical:60,reasoning:25,communication:15},passingScore:70,instructions:'Explain your thinking and assumptions.'},
@@ -16,13 +18,51 @@ export function StoreProvider({children}) {
  const [assessments,setAssessments]=useState(()=>stored('assessments',initialAssessments));
  const [candidates,setCandidates]=useState(()=>stored('candidates',initialCandidates));
  const [submissions,setSubmissions]=useState(()=>stored('submissions',[]));
- const [user,setUser]=useState(()=>stored('user',null));
+ const [session,setSession]=useState(readAuthSession);
+ const [authLoading,setAuthLoading]=useState(Boolean(session));
+ const user=session?.user||null;
+ const token=session?.token||null;
  const [toast,setToast]=useState('');
  useEffect(()=>localStorage.setItem('tf_assessments',JSON.stringify(assessments)),[assessments]);
  useEffect(()=>localStorage.setItem('tf_candidates',JSON.stringify(candidates)),[candidates]);
  useEffect(()=>localStorage.setItem('tf_submissions',JSON.stringify(submissions)),[submissions]);
- useEffect(()=>localStorage.setItem('tf_user',JSON.stringify(user)),[user]);
+ useEffect(()=>writeAuthSession(session),[session]);
+ useEffect(()=>{
+  const restored=readAuthSession();
+  if(!restored)return undefined;
+  let active=true;
+  apiRequest('/auth/me',{token:restored.token})
+   .then(identity=>{
+    if(!active)return;
+    if(!Number.isInteger(identity?.id)||!['candidate','employer'].includes(identity?.role)){
+     throw new Error('The session response was invalid.');
+    }
+    setSession(current=>current?.token===restored.token?{
+     ...current,user:{...current.user,id:identity.id,role:identity.role}
+    }:current);
+   })
+   .catch(()=>{if(active)setSession(null);})
+   .finally(()=>{if(active)setAuthLoading(false);});
+  return ()=>{active=false;};
+ },[]);
+ const setAuth=useCallback((accessToken,backendUser)=>{
+  const next={token:accessToken,user:{id:backendUser.id,name:backendUser.full_name,email:backendUser.email,role:backendUser.role}};
+  setSession(next);
+  setAuthLoading(false);
+ },[]);
+ const setUser=useCallback(nextUser=>{
+  if(nextUser==null){
+   setSession(null);
+   setAuthLoading(false);
+   return;
+  }
+  setSession(current=>{
+   if(!current)return current;
+   const updated=typeof nextUser==='function'?nextUser(current.user):nextUser;
+   return {...current,user:{...updated,id:current.user.id,role:current.user.role}};
+  });
+ },[]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),4000);return ()=>clearTimeout(timer);},[toast]);
- const value=useMemo(()=>({assessments,setAssessments,candidates,setCandidates,submissions,setSubmissions,user,setUser,toast,setToast}),[assessments,candidates,submissions,user,toast]);
+ const value=useMemo(()=>({assessments,setAssessments,candidates,setCandidates,submissions,setSubmissions,user,token,setUser,setAuth,authLoading,toast,setToast}),[assessments,candidates,submissions,user,token,setUser,setAuth,authLoading,toast]);
  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
