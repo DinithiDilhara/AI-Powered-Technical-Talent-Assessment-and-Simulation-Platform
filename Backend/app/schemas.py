@@ -1,7 +1,8 @@
 
 from enum import Enum
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, JsonValue, model_validator, ConfigDict
 from datetime import datetime
+from decimal import Decimal
 
 
 class UserRole(str, Enum):
@@ -66,3 +67,36 @@ class AssessmentResponse(BaseModel):
     created_by: int
     status: AssessmentStatus
     created_at: datetime
+
+
+class SubmissionStatus(str, Enum):
+    in_progress = "in_progress"
+    submitted = "submitted"
+    evaluated = "evaluated"
+
+
+class SubmissionStart(BaseModel):
+    assessment_id: int = Field(gt=0)
+
+
+class SubmissionAnswersUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answers: dict[str, JsonValue]
+
+    @model_validator(mode="after")
+    def validate_answer_keys(self):
+        if any(not key.strip() for key in self.answers):
+            raise ValueError("Answer keys must contain a question or task ID")
+        return self
+
+
+class SubmissionResponse(BaseModel):
+    id: int
+    candidate_id: int
+    assessment_id: int
+    answers: dict[str, JsonValue]
+    score: Decimal | None
+    status: SubmissionStatus
+    started_at: datetime
+    submitted_at: datetime | None
