@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -18,6 +19,7 @@ from app.schemas import (
 
 
 router = APIRouter(tags=["Invitations"])
+logger = logging.getLogger(__name__)
 INVITATION_DAYS = 7
 INVITATION_COLUMNS = (
     "i.id, i.assessment_id, i.invited_email, i.candidate_id, i.expires_at, "
@@ -240,8 +242,12 @@ def claim_invitation(
     except HTTPException:
         connection.rollback()
         raise
-    except Exception:
+    except Exception as error:
         connection.rollback()
-        raise HTTPException(status_code=500, detail="Could not claim invitation")
+        # Do not log SQL parameters, invitation tokens, or database error text:
+        # constraint errors can contain the entire invitation record.
+        logger.error("Invitation claim failed: type=%s sqlstate=%s",
+                     type(error).__name__, getattr(error, "sqlstate", None))
+        raise HTTPException(status_code=500, detail="Could not claim invitation") from None
     finally:
         connection.close()
